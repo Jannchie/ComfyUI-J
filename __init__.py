@@ -35,9 +35,25 @@ def get_prompt_embeds(pipe, prompt, negative_prompt):
     return prompt_embeds, negative_prompt_embeds
 
 
-def latents_to_tensor(pipeline, latents):
-    image_numpy = pipeline.decode_latents(latents)  # numpy
-    return torch.tensor(image_numpy)
+def latents_to_img_tensor(pipeline, latents):
+    # 1. 输入的 latents 是一个 -1 ~ 1 之间的 tensor
+    # 2. 先进行缩放
+    scaled_latents = latents / pipeline.vae.config.scaling_factor
+    # 3. 解码，返回的是 -1 ~ 1 之间的 tensor
+    dec_tensor = pipeline.vae.decode(scaled_latents, return_dict=False)[0]
+    # 4. 缩放到 0 ~ 1 之间
+    dec_images = pipeline.image_processor.postprocess(
+        dec_tensor,
+        output_type="pt",
+        do_denormalize=[True for _ in range(scaled_latents.shape[0])],
+    )
+    # 5. 转换成 tensor,
+    res = torch.nan_to_num(dec_images).to(dtype=torch.float32)
+    # 6. 将 channel 放到最后
+    # res shape torch.Size([1, 3, 512, 512]) => torch.Size([1, 512, 512, 3])
+    res = res.permute(0, 2, 3, 1)
+    print('res shape', res.shape)
+    return res
 
 
 def prepare_latents(
@@ -71,6 +87,29 @@ def prepare_latents(
     # scale the initial noise by the standard deviation required by the scheduler
     latents = latents * pipe.scheduler.init_noise_sigma
     return latents
+
+
+def prepare_image(
+    pipeline: StableDiffusionPipeline,
+    seed=47,
+    batch_size=1,
+    num_channels_latents=4,
+    height=512,
+    width=512,
+):
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    latents = prepare_latents(
+        pipe=pipeline,
+        batch_size=batch_size,
+        num_channels_latents=num_channels_latents,
+        height=height,
+        width=width,
+        generator=generator,
+        device=comfy.model_management.get_torch_device(),
+        dtype=comfy.model_management.VAE_DTYPE,
+    )
+    return latents_to_img_tensor(pipeline, latents)
 
 
 class GetFilledColorImage:
@@ -367,10 +406,11 @@ class DiffusersDecoder:
         }
 
     def run(self, pipeline: StableDiffusionPipeline, latents: torch.Tensor):
-        return (latents_to_tensor(pipeline, latents),)
+        res = latents_to_img_tensor(pipeline, latents)
+        return (res,)
 
 
-class DiffusersGenerate:
+class DiffusersGenerator:
     CATEGORY = "Jannchie"
     FUNCTION = "run"
     RETURN_TYPES = ("IMAGE",)
@@ -391,9 +431,10 @@ class DiffusersGenerate:
                     "INT",
                     {"default": 30, "min": 1, "max": 100, "step": 1},
                 ),
-            },
-            "optional": {
-                "images": ("IMAGE",),
+                "guidance_scale": (
+                    "FLOAT",
+                    {"default": 7.0, "min": 0.0, "max": 30.0, "step": 0.02},
+                ),
                 "seed": (
                     "INT",
                     {"default": 0, "min": 0, "step": 1, "max": 999999999999},
@@ -417,6 +458,13 @@ class DiffusersGenerate:
                         "step": 64,
                     },
                 ),
+                "num_channels_latents": (
+                    "INT",
+                    {"default": 4, "min": 1, "max": 4, "step": 1},
+                ),
+            },
+            "optional": {
+                "images": ("IMAGE",),
             },
         }
 
@@ -431,8 +479,11 @@ class DiffusersGenerate:
         images: torch.Tensor | None = None,
         num_inference_steps: int = 30,
         strength: float = 1.0,
+        num_channels_latents: int = 4,
+        guidance_scale: float = 7.0,
         seed=None,
     ):
+        latents = None
         pbar = ProgressBar(int(num_inference_steps * strength))
         device = comfy.model_management.get_torch_device()
         if not seed:
@@ -444,16 +495,17 @@ class DiffusersGenerate:
             latents = prepare_latents(
                 pipe=pipeline,
                 batch_size=batch_size,
-                num_channels_latents=4,
+                num_channels_latents=num_channels_latents,
                 height=height,
                 width=width,
                 generator=generator,
-                dtype=comfy.model_management.VAE_DTYPE,
                 device=device,
+                dtype=comfy.model_management.VAE_DTYPE,
             )
-            images = latents_to_tensor(pipeline, latents).permute(0, 3, 1, 2)
+            images = latents_to_img_tensor(pipeline, latents)
         else:
-            images = images.permute(0, 3, 1, 2)
+            images = images
+
         # positive_prompt_embedding 和 negative_prompt_embedding 需要匹配 batch_size
         positive_prompt_embedding = positive_prompt_embedding.repeat(batch_size, 1, 1)
         negative_prompt_embedding = negative_prompt_embedding.repeat(batch_size, 1, 1)
@@ -463,10 +515,14 @@ class DiffusersGenerate:
 
         result = pipeline(
             image=images,
+            # latents=latents,
             generator=generator,
+            width=width,
+            height=height,
             prompt_embeds=positive_prompt_embedding,
             negative_prompt_embeds=negative_prompt_embedding,
             num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
             callback_steps=1,
             strength=strength,
             callback=callback,
@@ -475,7 +531,7 @@ class DiffusersGenerate:
         # image = result["images"][0]
         # images to torch.Tensor
         imgs = [np.array(img) for img in result["images"]]
-        imgs = torch.tensor(imgs, dtype=images.dtype)
+        imgs = torch.tensor(imgs)
         result["images"][0].save("1.png")
         # 0 ~ 255 to 0 ~ 1
         imgs = imgs / 255
@@ -487,7 +543,7 @@ NODE_CLASS_MAPPINGS = {
     "GetFilledColorImage": GetFilledColorImage,
     "GetAverageColorFromImage": GetAverageColorFromImage,
     "DiffusersPipeline": DiffusersPipeline,
-    "DiffusersGenerate": DiffusersGenerate,
+    "DiffusersGenerator": DiffusersGenerator,
     "DiffusersPrepareLatents": DiffusersPrepareLatents,
     "DiffusersDecoder": DiffusersDecoder,
     "DiffusersCompelPromptEmbedding": DiffusersCompelPromptEmbedding,
@@ -496,10 +552,10 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GetFilledColorImage": "Get Filled Color Image Jannchie",
     "GetAverageColorFromImage": "Get Average Color From Image Jannchie",
-    "DiffusersPipeline": "Diffusers Pipeline",
-    "DiffusersGenerate": "Diffusers Generate",
-    "DiffusersPrepareLatents": "Diffusers Prepare Latents",
-    "DiffusersDecoder": "Diffusers Decoder",
-    "DiffusersCompelPromptEmbedding": "Diffusers Compel Prompt Embedding",
-    "DiffusersTextureInversionLoader": "Diffusers Texture Inversion Embedding Loader",
+    "DiffusersPipeline": "🤗 Diffusers Pipeline",
+    "DiffusersGenerator": "🤗 Diffusers Generator",
+    "DiffusersPrepareLatents": "🤗 Diffusers Prepare Latents",
+    "DiffusersDecoder": "🤗 Diffusers Decoder",
+    "DiffusersCompelPromptEmbedding": "🤗 Diffusers Compel Prompt Embedding",
+    "DiffusersTextureInversionLoader": "🤗 Diffusers Texture Inversion Embedding Loader",
 }

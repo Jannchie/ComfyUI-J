@@ -1,4 +1,3 @@
-import torch
 from diffusers import AutoencoderKL, StableDiffusionImg2ImgPipeline
 from diffusers.schedulers import (
     DEISMultistepScheduler,
@@ -14,6 +13,8 @@ from diffusers.schedulers import (
 )
 
 import comfy.model_management
+
+from .jannchie import JannchiePipeline
 
 schedulers = {
     "DPM++ 2M": DPMSolverMultistepScheduler(),
@@ -47,12 +48,12 @@ class PipelineWrapper:
         device = comfy.model_management.get_torch_device()
         dtype = comfy.model_management.VAE_DTYPE
         if ckpt_path.endswith(".safetensors"):
-            self.pipeline = StableDiffusionImg2ImgPipeline.from_single_file(
+            self.pipeline = JannchiePipeline.from_single_file(
                 ckpt_path,
                 torch_dtype=dtype,
             )
         else:
-            self.pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
+            self.pipeline = JannchiePipeline.from_pretrained(
                 ckpt_path,
                 torch_dtype=dtype,
             )
@@ -60,12 +61,12 @@ class PipelineWrapper:
             if vae_path.endswith(".safetensors"):
                 self.pipeline.vae = AutoencoderKL.from_single_file(
                     vae_path,
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=dtype,
                 )
             else:
                 self.pipeline.vae = AutoencoderKL.from_pretrained(
                     vae_path,
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=dtype,
                 )
         if scheduler:
             self.pipeline.scheduler = scheduler
