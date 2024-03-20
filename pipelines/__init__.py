@@ -14,7 +14,7 @@ from diffusers.schedulers import (
 
 import comfy.model_management
 
-from .jannchie import JannchiePipeline
+from .jannchie import *
 
 schedulers = {
     "DPM++ 2M": DPMSolverMultistepScheduler(),
@@ -37,7 +37,6 @@ schedulers = {
     "DEIS": DEISMultistepScheduler(),
     "UniPC": UniPCMultistepScheduler(),
 }
-
 
 class PipelineWrapper:
 

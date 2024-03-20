@@ -6,13 +6,48 @@ import numpy as np
 import torch
 from compel import Compel, DiffusersTextualInversionManager
 from diffusers import StableDiffusionPipeline
+from diffusers.models import ControlNetModel
 from diffusers.utils.torch_utils import randn_tensor
+from PIL import Image
 
 import comfy.model_management
 import folder_paths
 from comfy.utils import ProgressBar
 
-from .pipelines import PipelineWrapper, schedulers
+from .pipelines import ControlNetUnit, ControlNetUnits, PipelineWrapper, schedulers
+
+
+def resize_with_padding(image: Image.Image, target_size: tuple[int, int]):
+    # 打开图像
+
+    # 计算缩放比例
+    width_ratio = target_size[0] / image.width
+    height_ratio = target_size[1] / image.height
+    ratio = min(width_ratio, height_ratio)
+
+    # 计算调整后的尺寸
+    new_width = int(image.width * ratio)
+    new_height = int(image.height * ratio)
+
+    # 缩放图像
+    image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    # 创建黑色背景图像
+    background = Image.new("RGBA", target_size, (0, 0, 0, 0))
+
+    # 计算粘贴位置
+    position = ((target_size[0] - new_width) // 2, (target_size[1] - new_height) // 2)
+
+    # 粘贴调整后的图像到黑色背景上
+    background.paste(image, position)
+    return background
+
+
+def comfy_image_to_pil(image: torch.Tensor):
+    image = image.squeeze(0)  # (1, H, W, C) => (H, W, C)
+    image = image * 255  # 0 ~ 1 => 0 ~ 255
+    image = image.to(dtype=torch.uint8)  # float32 => uint8
+    return Image.fromarray(image.numpy())  # tensor => PIL.Image.Image
 
 
 def get_prompt_embeds(pipe, prompt, negative_prompt):
@@ -52,7 +87,25 @@ def latents_to_img_tensor(pipeline, latents):
     # 6. 将 channel 放到最后
     # res shape torch.Size([1, 3, 512, 512]) => torch.Size([1, 512, 512, 3])
     res = res.permute(0, 2, 3, 1)
-    print('res shape', res.shape)
+    return res
+
+
+def latents_to_mask_tensor(pipeline, latents):
+    # 1. 输入的 latents 是一个 -1 ~ 1 之间的 tensor
+    # 2. 先进行缩放
+    scaled_latents = latents / pipeline.vae.config.scaling_factor
+    # 3. 解码，返回的是 -1 ~ 1 之间的 tensor
+    dec_tensor = pipeline.vae.decode(scaled_latents, return_dict=False)[0]
+    # 4. 缩放到 0 ~ 1 之间
+    dec_images = pipeline.mask_processor.postprocess(
+        dec_tensor,
+        output_type="pt",
+    )
+    # 5. 转换成 tensor,
+    res = torch.nan_to_num(dec_images).to(dtype=torch.float32)
+    # 6. 将 channel 放到最后
+    # res shape torch.Size([1, 3, 512, 512]) => torch.Size([1, 512, 512, 3])
+    res = res.permute(0, 2, 3, 1)
     return res
 
 
@@ -410,6 +463,122 @@ class DiffusersDecoder:
         return (res,)
 
 
+class DiffusersControlNetLoader:
+    CATEGORY = "Jannchie"
+    FUNCTION = "run"
+    RETURN_TYPES = ("DIFFUSERS_CONTROLNET",)
+    RETURN_NAMES = ("controlnet",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "controlnet_model_name": (
+                    folder_paths.get_filename_list("controlnet"),
+                ),
+            },
+        }
+
+    def run(self, controlnet_model_name: str):
+        controlnet_model_path = folder_paths.get_full_path(
+            "controlnet", controlnet_model_name
+        )
+        controlnet = ControlNetModel.from_single_file(controlnet_model_path).to(
+            device=comfy.model_management.get_torch_device(),
+            dtype=comfy.model_management.VAE_DTYPE,
+        )
+        return (controlnet,)
+
+
+class DiffusersControlNetUnit:
+    CATEGORY = "Jannchie"
+    FUNCTION = "run"
+    RETURN_TYPES = ("CONTROLNET_UNIT",)
+    RETURN_NAMES = ("controlnet unit",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "controlnet": ("DIFFUSERS_CONTROLNET",),
+                "image": ("IMAGE",),
+                "scale": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.1},
+                ),
+                "start": (
+                    "FLOAT",
+                    {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.1},
+                ),
+                "end": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.1},
+                ),
+            },
+        }
+
+    def run(
+        self,
+        controlnet: ControlNetModel,
+        image: torch.Tensor,
+        scale: float,
+        start: float,
+        end: float,
+    ):
+        unit = ControlNetUnit(
+            controlnet=controlnet,
+            image=comfy_image_to_pil(image),
+            scale=scale,
+            start=start,
+            end=end,
+        )
+        return ((unit,),)
+
+
+class DiffusersControlNetUnitStack:
+    CATEGORY = "Jannchie"
+    FUNCTION = "run"
+    RETURN_TYPES = ("CONTROLNET_UNIT",)
+    RETURN_NAMES = ("controlnet unit",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "controlnet_unit_1": ("CONTROLNET_UNIT",),
+            },
+            "optional": {
+                "controlnet_unit_2": (
+                    "CONTROLNET_UNIT",
+                    {
+                        "default": None,
+                    },
+                ),
+                "controlnet_unit_3": (
+                    "CONTROLNET_UNIT",
+                    {
+                        "default": None,
+                    },
+                ),
+            },
+        }
+
+    def run(
+        self,
+        controlnet_unit_1: tuple[ControlNetModel],
+        controlnet_unit_2: tuple[ControlNetModel] | None,
+        controlnet_unit_3: tuple[ControlNetModel] | None,
+    ):
+        stack = []
+        if controlnet_unit_1:
+            stack += controlnet_unit_1
+        if controlnet_unit_2:
+            stack += controlnet_unit_2
+        if controlnet_unit_3:
+            stack += controlnet_unit_3
+        return (stack,)
+
+
 class DiffusersGenerator:
     CATEGORY = "Jannchie"
     FUNCTION = "run"
@@ -465,6 +634,8 @@ class DiffusersGenerator:
             },
             "optional": {
                 "images": ("IMAGE",),
+                "mask": ("MASK",),
+                "controlnet_units": ("CONTROLNET_UNIT",),
             },
         }
 
@@ -481,7 +652,9 @@ class DiffusersGenerator:
         strength: float = 1.0,
         num_channels_latents: int = 4,
         guidance_scale: float = 7.0,
+        controlnet_units: tuple[ControlNetUnit] = None,
         seed=None,
+        mask: torch.Tensor | None = None,
     ):
         latents = None
         pbar = ProgressBar(int(num_inference_steps * strength))
@@ -509,13 +682,21 @@ class DiffusersGenerator:
         # positive_prompt_embedding 和 negative_prompt_embedding 需要匹配 batch_size
         positive_prompt_embedding = positive_prompt_embedding.repeat(batch_size, 1, 1)
         negative_prompt_embedding = negative_prompt_embedding.repeat(batch_size, 1, 1)
+        width = images.shape[2]
+        height = images.shape[1]
 
         def callback(*_):
             pbar.update(1)
 
+        if controlnet_units is not None:
+            for unit in controlnet_units:
+                target_image_shape = (width, height)
+                unit_img = resize_with_padding(unit.image, target_image_shape)
+                unit.image = unit_img
+            controlnet_units = ControlNetUnits(controlnet_units)
         result = pipeline(
             image=images,
-            # latents=latents,
+            mask_image=mask,
             generator=generator,
             width=width,
             height=height,
@@ -525,6 +706,7 @@ class DiffusersGenerator:
             guidance_scale=guidance_scale,
             callback_steps=1,
             strength=strength,
+            controlnet_units=controlnet_units,
             callback=callback,
             return_dict=True,
         )
@@ -548,6 +730,9 @@ NODE_CLASS_MAPPINGS = {
     "DiffusersDecoder": DiffusersDecoder,
     "DiffusersCompelPromptEmbedding": DiffusersCompelPromptEmbedding,
     "DiffusersTextureInversionLoader": DiffusersTextureInversionLoader,
+    "DiffusersControlnetLoader": DiffusersControlNetLoader,
+    "DiffusersControlnetUnit": DiffusersControlNetUnit,
+    "DiffusersControlnetUnitStack": DiffusersControlNetUnitStack,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GetFilledColorImage": "Get Filled Color Image Jannchie",
@@ -558,4 +743,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DiffusersDecoder": "🤗 Diffusers Decoder",
     "DiffusersCompelPromptEmbedding": "🤗 Diffusers Compel Prompt Embedding",
     "DiffusersTextureInversionLoader": "🤗 Diffusers Texture Inversion Embedding Loader",
+    "DiffusersControlnetLoader": "🤗 Diffusers Controlnet Loader",
+    "DiffusersControlnetUnit": "🤗 Diffusers Controlnet Unit",
+    "DiffusersControlnetUnitStack": "🤗 Diffusers Controlnet Unit Stack",
 }
