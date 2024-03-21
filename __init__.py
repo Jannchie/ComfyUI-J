@@ -112,7 +112,6 @@ def latents_to_mask_tensor(pipeline, latents):
 def prepare_latents(
     pipe: StableDiffusionPipeline,
     batch_size: int,
-    num_channels_latents: int,
     height: int,
     width: int,
     dtype: torch.dtype,
@@ -122,7 +121,7 @@ def prepare_latents(
 ):
     shape = (
         batch_size,
-        num_channels_latents,
+        pipe.unet.config.in_channels,
         height // pipe.vae_scale_factor,
         width // pipe.vae_scale_factor,
     )
@@ -146,7 +145,6 @@ def prepare_image(
     pipeline: StableDiffusionPipeline,
     seed=47,
     batch_size=1,
-    num_channels_latents=4,
     height=512,
     width=512,
 ):
@@ -155,7 +153,6 @@ def prepare_image(
     latents = prepare_latents(
         pipe=pipeline,
         batch_size=batch_size,
-        num_channels_latents=num_channels_latents,
         height=height,
         width=width,
         generator=generator,
@@ -432,7 +429,6 @@ class DiffusersPrepareLatents:
         latents = prepare_latents(
             pipe=pipeline,
             batch_size=batch_size,
-            num_channels_latents=4,
             height=height,
             width=width,
             dtype=comfy.model_management.VAE_DTYPE,
@@ -627,15 +623,27 @@ class DiffusersGenerator:
                         "step": 64,
                     },
                 ),
-                "num_channels_latents": (
-                    "INT",
-                    {"default": 4, "min": 1, "max": 4, "step": 1},
-                ),
             },
             "optional": {
                 "images": ("IMAGE",),
                 "mask": ("MASK",),
                 "controlnet_units": ("CONTROLNET_UNIT",),
+                "reference_image": (
+                    "IMAGE",
+                    {"default": None},
+                ),
+                "reference_only": (
+                    ["disable", "enable"],
+                    {
+                        "default": "disable",
+                    },
+                ),
+                "reference_only_adain": (
+                    ["disable", "enable"],
+                    {
+                        "default": "disable",
+                    },
+                ),
             },
         }
 
@@ -650,12 +658,16 @@ class DiffusersGenerator:
         images: torch.Tensor | None = None,
         num_inference_steps: int = 30,
         strength: float = 1.0,
-        num_channels_latents: int = 4,
         guidance_scale: float = 7.0,
         controlnet_units: tuple[ControlNetUnit] = None,
         seed=None,
         mask: torch.Tensor | None = None,
+        reference_only: str = "disable",
+        reference_only_adain: str = "disable",
+        reference_image: torch.Tensor | None = None,
     ):
+        reference_only = reference_only == "enable"
+        reference_only_adain = reference_only_adain == "enable"
         latents = None
         pbar = ProgressBar(int(num_inference_steps * strength))
         device = comfy.model_management.get_torch_device()
@@ -668,7 +680,6 @@ class DiffusersGenerator:
             latents = prepare_latents(
                 pipe=pipeline,
                 batch_size=batch_size,
-                num_channels_latents=num_channels_latents,
                 height=height,
                 width=width,
                 generator=generator,
@@ -697,6 +708,7 @@ class DiffusersGenerator:
         result = pipeline(
             image=images,
             mask_image=mask,
+            ref_image=reference_image if reference_image is not None else images,
             generator=generator,
             width=width,
             height=height,
@@ -708,6 +720,8 @@ class DiffusersGenerator:
             strength=strength,
             controlnet_units=controlnet_units,
             callback=callback,
+            reference_attn=reference_only,
+            reference_adain=reference_only_adain,
             return_dict=True,
         )
         # image = result["images"][0]
