@@ -623,6 +623,15 @@ class DiffusersGenerator:
                         "step": 64,
                     },
                 ),
+                "reference_style_fidelity": (
+                    "FLOAT",
+                    {
+                        "default": 0.5,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.1,
+                    },
+                ),
             },
             "optional": {
                 "images": ("IMAGE",),
@@ -665,6 +674,7 @@ class DiffusersGenerator:
         reference_only: str = "disable",
         reference_only_adain: str = "disable",
         reference_image: torch.Tensor | None = None,
+        reference_style_fidelity: float = 0.5,
     ):
         reference_only = reference_only == "enable"
         reference_only_adain = reference_only_adain == "enable"
@@ -722,6 +732,7 @@ class DiffusersGenerator:
             callback=callback,
             reference_attn=reference_only,
             reference_adain=reference_only_adain,
+            style_fidelity=reference_style_fidelity,
             return_dict=True,
         )
         # image = result["images"][0]

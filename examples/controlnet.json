@@ -1,47 +1,7 @@
 {
-  "last_node_id": 13,
-  "last_link_id": 28,
+  "last_node_id": 14,
+  "last_link_id": 33,
   "nodes": [
-    {
-      "id": 7,
-      "type": "LoadImage",
-      "pos": [
-        110,
-        470
-      ],
-      "size": {
-        "0": 370.4840393066406,
-        "1": 537.7867431640625
-      },
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            17
-          ],
-          "shape": 3,
-          "slot_index": 0
-        },
-        {
-          "name": "MASK",
-          "type": "MASK",
-          "links": null,
-          "shape": 3
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "LoadImage"
-      },
-      "widgets_values": [
-        "image.png",
-        "image"
-      ],
-      "shape": 1
-    },
     {
       "id": 1,
       "type": "DiffusersPipeline",
@@ -54,7 +14,7 @@
         "1": 110
       },
       "flags": {},
-      "order": 1,
+      "order": 0,
       "mode": 0,
       "outputs": [
         {
@@ -62,7 +22,7 @@
           "type": "DIFFUSERS_PIPELINE",
           "links": [
             2,
-            24
+            29
           ],
           "shape": 3,
           "slot_index": 0
@@ -90,7 +50,7 @@
         "1": 200
       },
       "flags": {},
-      "order": 4,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -104,7 +64,7 @@
           "name": "positive prompt embedding",
           "type": "DIFFUSERS_PROMPT_EMBEDDING",
           "links": [
-            22
+            30
           ],
           "shape": 3,
           "slot_index": 0
@@ -113,7 +73,7 @@
           "name": "negative prompt embedding",
           "type": "DIFFUSERS_PROMPT_EMBEDDING",
           "links": [
-            23
+            31
           ],
           "shape": 3,
           "slot_index": 1
@@ -140,7 +100,7 @@
         "1": 60
       },
       "flags": {},
-      "order": 2,
+      "order": 1,
       "mode": 0,
       "outputs": [
         {
@@ -192,7 +152,7 @@
           "name": "controlnet unit",
           "type": "CONTROLNET_UNIT",
           "links": [
-            25
+            32
           ],
           "shape": 3,
           "slot_index": 0
@@ -220,7 +180,7 @@
         "1": 150
       },
       "flags": {},
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -284,7 +244,7 @@
         {
           "name": "image_a",
           "type": "IMAGE",
-          "link": 27,
+          "link": 33,
           "dir": 3
         },
         {
@@ -300,14 +260,14 @@
       },
       "widgets_values": [
         [
-          "/view?filename=rgthree.compare._temp_dbajh_00019_.png&type=temp&subfolder=&rand=0.6031372112098188",
-          "/view?filename=rgthree.compare._temp_dbajh_00020_.png&type=temp&subfolder=&rand=0.1277051032478802"
+          "/view?filename=rgthree.compare._temp_pknnj_00003_.png&type=temp&subfolder=&rand=0.7251475711869597",
+          "/view?filename=rgthree.compare._temp_pknnj_00004_.png&type=temp&subfolder=&rand=0.5900207825118742"
         ]
       ],
       "shape": 1
     },
     {
-      "id": 12,
+      "id": 14,
       "type": "DiffusersGenerator",
       "pos": [
         1380,
@@ -315,7 +275,7 @@
       ],
       "size": {
         "0": 405.5999755859375,
-        "1": 394
+        "1": 418
       },
       "flags": {},
       "order": 6,
@@ -324,17 +284,17 @@
         {
           "name": "pipeline",
           "type": "DIFFUSERS_PIPELINE",
-          "link": 24
+          "link": 29
         },
         {
           "name": "positive_prompt_embedding",
           "type": "DIFFUSERS_PROMPT_EMBEDDING",
-          "link": 22
+          "link": 30
         },
         {
           "name": "negative_prompt_embedding",
           "type": "DIFFUSERS_PROMPT_EMBEDDING",
-          "link": 23
+          "link": 31
         },
         {
           "name": "images",
@@ -349,7 +309,7 @@
         {
           "name": "controlnet_units",
           "type": "CONTROLNET_UNIT",
-          "link": 25
+          "link": 32
         },
         {
           "name": "reference_image",
@@ -362,7 +322,7 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            27
+            33
           ],
           "shape": 3,
           "slot_index": 0
@@ -375,13 +335,53 @@
         1,
         30,
         7,
-        711606850977,
+        127993911908,
         "randomize",
         1,
         512,
         512,
+        0.5,
         "disable",
         "disable"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "LoadImage",
+      "pos": [
+        110,
+        470
+      ],
+      "size": {
+        "0": 370.4840393066406,
+        "1": 537.7867431640625
+      },
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            17
+          ],
+          "shape": 3,
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "shape": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "image_jjZSuko8_1701021290044_raw.webp",
+        "image"
       ],
       "shape": 1
     }
@@ -420,51 +420,51 @@
       "DIFFUSERS_CONTROLNET"
     ],
     [
-      22,
-      3,
-      0,
-      12,
-      1,
-      "DIFFUSERS_PROMPT_EMBEDDING"
-    ],
-    [
-      23,
-      3,
-      1,
-      12,
-      2,
-      "DIFFUSERS_PROMPT_EMBEDDING"
-    ],
-    [
-      24,
-      1,
-      0,
-      12,
-      0,
-      "DIFFUSERS_PIPELINE"
-    ],
-    [
-      25,
-      9,
-      0,
-      12,
-      5,
-      "CONTROLNET_UNIT"
-    ],
-    [
-      27,
-      12,
-      0,
-      13,
-      0,
-      "IMAGE"
-    ],
-    [
       28,
       8,
       0,
       13,
       1,
+      "IMAGE"
+    ],
+    [
+      29,
+      1,
+      0,
+      14,
+      0,
+      "DIFFUSERS_PIPELINE"
+    ],
+    [
+      30,
+      3,
+      0,
+      14,
+      1,
+      "DIFFUSERS_PROMPT_EMBEDDING"
+    ],
+    [
+      31,
+      3,
+      1,
+      14,
+      2,
+      "DIFFUSERS_PROMPT_EMBEDDING"
+    ],
+    [
+      32,
+      9,
+      0,
+      14,
+      5,
+      "CONTROLNET_UNIT"
+    ],
+    [
+      33,
+      14,
+      0,
+      13,
+      0,
       "IMAGE"
     ]
   ],
