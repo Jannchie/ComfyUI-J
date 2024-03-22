@@ -1212,8 +1212,6 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
         assert isinstance(bank, list)
 
         uc_mask = ref_data.uc_mask
-        bool_mask = ref_data.bool_mask
-        ref_mask_dict = ref_data.ref_mask_dict
 
         if self.use_ada_layer_norm:
             norm_hidden_states = self.norm1(hidden_states, timestep)

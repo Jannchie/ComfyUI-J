@@ -1,3 +1,5 @@
+import contextlib
+
 from diffusers import AutoencoderKL, StableDiffusionImg2ImgPipeline
 from diffusers.schedulers import (
     DEISMultistepScheduler,
@@ -38,6 +40,7 @@ schedulers = {
     "UniPC": UniPCMultistepScheduler(),
 }
 
+
 class PipelineWrapper:
 
     def __init__(
@@ -71,3 +74,5 @@ class PipelineWrapper:
             self.pipeline.scheduler = scheduler
         self.pipeline.to(device)
         self.pipeline.safety_checker = None
+        with contextlib.suppress(Exception):
+            self.pipeline.enable_xformers_memory_efficient_attention()
