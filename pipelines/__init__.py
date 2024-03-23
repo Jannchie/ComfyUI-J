@@ -1,6 +1,7 @@
 import contextlib
 
-from diffusers import AutoencoderKL, StableDiffusionImg2ImgPipeline
+import comfy.model_management
+from diffusers import AutoencoderKL
 from diffusers.schedulers import (
     DEISMultistepScheduler,
     DPMSolverMultistepScheduler,
@@ -13,8 +14,6 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     UniPCMultistepScheduler,
 )
-
-import comfy.model_management
 
 from .jannchie import *
 

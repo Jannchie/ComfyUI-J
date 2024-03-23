@@ -35,7 +35,7 @@ from transformers import (
 
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
@@ -400,7 +400,6 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         latent_timestep = timesteps[:1].repeat(batch_size * num_images_per_prompt)
 
         # 7. Prepare latent variables
-        logger.debug("Preparing latent variables")
         num_channels_latents = self.unet.config.in_channels
         if image is not None:
             if isinstance(image, PIL.Image.Image):
@@ -418,7 +417,6 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                     False,  # it will duplicate the latents after this step
                 )
 
-        logger.debug("Preparing latents")
         num_channels_unet = self.unet.config.in_channels
         return_image_latents = num_channels_unet == 4
         latents_outputs = self.prepare_latents(
@@ -443,12 +441,14 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
 
         # 7. Prepare mask latent variables
         if mask_image is not None:
+            print(height, width)
             mask_condition = self.mask_processor.preprocess(
                 mask_image, height=height, width=width
             )
             init_image = image
             init_image = init_image.to(dtype=torch.float32)
             if masked_image_latents is None:
+                print(init_image.shape, mask_condition.shape)
                 masked_image = init_image * (mask_condition < 0.5)
             else:
                 masked_image = masked_image_latents
@@ -842,6 +842,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         self.mask_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor,
             do_normalize=False,
+            do_resize=False,
             do_binarize=True,
             do_convert_grayscale=True,
         )
