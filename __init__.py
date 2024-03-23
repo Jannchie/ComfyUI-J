@@ -459,6 +459,25 @@ class DiffusersDecoder:
         return (res,)
 
 
+# 'https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/control_v11p_sd15_canny.pth'
+controlnet_list = [
+    "canny",
+    "openpose",
+    "depth",
+    "tile",
+    "ip2p",
+    "shuffle",
+    "inpaint",
+    "lineart",
+    "mlsd",
+    "normalbae",
+    "scribble",
+    "seg",
+    "softedge",
+    "lineart_anime",
+]
+
+
 class DiffusersControlNetLoader:
     CATEGORY = "Jannchie"
     FUNCTION = "run"
@@ -469,17 +488,26 @@ class DiffusersControlNetLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "controlnet_model_name": (
-                    folder_paths.get_filename_list("controlnet"),
-                ),
+                "controlnet_model_name": (controlnet_list,),
             },
         }
 
     def run(self, controlnet_model_name: str):
-        controlnet_model_path = folder_paths.get_full_path(
-            "controlnet", controlnet_model_name
+        file_list = folder_paths.get_filename_list("controlnet")
+        controlnet_model_path = next(
+            (
+                folder_paths.get_full_path("controlnet", file)
+                for file in file_list
+                if f"_v11p_sd15_{controlnet_model_name}.pth" in file
+            ),
+            None,
         )
-        controlnet = ControlNetModel.from_single_file(controlnet_model_path).to(
+        if controlnet_model_path is None:
+            controlnet_model_path = f"https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/control_v11p_sd15_{controlnet_model_name}.pth"
+        controlnet = ControlNetModel.from_single_file(
+            controlnet_model_path,
+            cache_dir=folder_paths.get_folder_paths("controlnet")[0],
+        ).to(
             device=comfy.model_management.get_torch_device(),
             dtype=comfy.model_management.VAE_DTYPE,
         )
