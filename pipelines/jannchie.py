@@ -1212,8 +1212,6 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
         bank = self.bank
         assert isinstance(bank, list)
 
-        uc_mask = ref_data.uc_mask
-
         if self.use_ada_layer_norm:
             norm_hidden_states = self.norm1(hidden_states, timestep)
         elif self.use_ada_layer_norm_zero:
@@ -1259,9 +1257,34 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
                 attention_mask=attention_mask,
                 **cross_attention_kwargs,
             )
-        else:
-            if ref_data.MODE == "write":
-                bank.append(norm_hidden_states.detach().clone())
+        elif ref_data.MODE == "read":
+            style_fidelity = ref_data.style_fidelity
+            attention_auto_machine_weight = ref_data.attention_auto_machine_weight
+            if attention_auto_machine_weight > self.attn_weight:
+                attn_output_uc = self.attn1(
+                    norm_hidden_states,
+                    encoder_hidden_states=torch.cat(
+                        [norm_hidden_states] + self.bank, dim=1
+                    ),
+                    # attention_mask=attention_mask,
+                    **cross_attention_kwargs,
+                )
+                attn_output_c = attn_output_uc.clone()
+                do_classifier_free_guidance = ref_data.do_classifier_free_guidance
+                if do_classifier_free_guidance and style_fidelity > 0:
+                    uc_mask = ref_data.uc_mask
+                    attn_output_c[uc_mask] = self.attn1(
+                        norm_hidden_states[uc_mask],
+                        encoder_hidden_states=norm_hidden_states[uc_mask],
+                        **cross_attention_kwargs,
+                    )
+                attn_output = (
+                    style_fidelity * attn_output_c
+                    + (1.0 - style_fidelity) * attn_output_uc
+                )
+                bank.clear()
+            else:
+                # without reference only
                 attn_output = self.attn1(
                     norm_hidden_states,
                     encoder_hidden_states=(
@@ -1270,42 +1293,17 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
                     attention_mask=attention_mask,
                     **cross_attention_kwargs,
                 )
-            if ref_data.MODE == "read":
-                style_fidelity = ref_data.style_fidelity
-                attention_auto_machine_weight = ref_data.attention_auto_machine_weight
-                do_classifier_free_guidance = ref_data.do_classifier_free_guidance
-                if attention_auto_machine_weight > self.attn_weight:
-                    attn_output_uc = self.attn1(
-                        norm_hidden_states,
-                        encoder_hidden_states=torch.cat(
-                            [norm_hidden_states] + self.bank, dim=1
-                        ),
-                        # attention_mask=attention_mask,
-                        **cross_attention_kwargs,
-                    )
-                    attn_output_c = attn_output_uc.clone()
-                    if do_classifier_free_guidance and style_fidelity > 0:
-                        attn_output_c[uc_mask] = self.attn1(
-                            norm_hidden_states[uc_mask],
-                            encoder_hidden_states=norm_hidden_states[uc_mask],
-                            **cross_attention_kwargs,
-                        )
-                    attn_output = (
-                        style_fidelity * attn_output_c
-                        + (1.0 - style_fidelity) * attn_output_uc
-                    )
-                    bank.clear()
-                else:
-                    # 原始的自注意力（无 reference only
-                    attn_output = self.attn1(
-                        norm_hidden_states,
-                        encoder_hidden_states=(
-                            encoder_hidden_states if self.only_cross_attention else None
-                        ),
-                        attention_mask=attention_mask,
-                        **cross_attention_kwargs,
-                    )
 
+        elif ref_data.MODE == "write":
+            bank.append(norm_hidden_states.detach().clone())
+            attn_output = self.attn1(
+                norm_hidden_states,
+                encoder_hidden_states=(
+                    encoder_hidden_states if self.only_cross_attention else None
+                ),
+                attention_mask=attention_mask,
+                **cross_attention_kwargs,
+            )
         if self.use_ada_layer_norm_zero:
             attn_output = gate_msa.unsqueeze(1) * attn_output
 
@@ -1314,7 +1312,6 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
         # 2.5 GLIGEN Control
         if gligen_kwargs is not None:
             hidden_states = self.fuser(hidden_states, gligen_kwargs["objs"])
-        # 2.5 ends
 
         # 2. Cross-Attention
         if self.attn2 is not None:
@@ -1347,9 +1344,7 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
         if self.use_ada_layer_norm_zero:
             ff_output = gate_mlp.unsqueeze(1) * ff_output
 
-        hidden_states = ff_output + hidden_states
-
-        return hidden_states
+        return ff_output + hidden_states
 
 
 class CrossAttnDownBlock2DReferenceOnly(CrossAttnDownBlock2D):
@@ -1380,7 +1375,8 @@ class CrossAttnDownBlock2DReferenceOnly(CrossAttnDownBlock2D):
         # TODO(Patrick, William) - attention mask is not used
         output_states = ()
 
-        for i, (resnet, attn) in enumerate(zip(self.resnets, self.attentions)):
+        blocks = list(zip(self.resnets, self.attentions))
+        for i, (resnet, attn) in enumerate(blocks):
             hidden_states = resnet(hidden_states, temb)
             hidden_states = attn(
                 hidden_states,
@@ -1412,7 +1408,9 @@ class CrossAttnDownBlock2DReferenceOnly(CrossAttnDownBlock2D):
                     style_fidelity * hidden_states_c
                     + (1.0 - style_fidelity) * hidden_states_uc
                 )
-
+            # apply additional residuals to the output of the last pair of resnet and attention blocks
+            if i == len(blocks) - 1 and additional_residuals is not None:
+                hidden_states = hidden_states + additional_residuals
             output_states = output_states + (hidden_states,)
 
         if MODE == "read":
@@ -1522,7 +1520,6 @@ class UNetMidBlock2DCrossAttnReferenceOnly(UNetMidBlock2DCrossAttn):
         do_classifier_free_guidance = self.ref_data.do_classifier_free_guidance
         style_fidelity = self.ref_data.style_fidelity
         uc_mask = self.ref_data.uc_mask
-        eps = 1e-6
         x = super().forward(*args, **kwargs)
         if MODE == "write" and gn_auto_machine_weight >= self.gn_weight:
             var, mean = torch.var_mean(x, dim=(2, 3), keepdim=True, correction=0)
@@ -1531,6 +1528,7 @@ class UNetMidBlock2DCrossAttnReferenceOnly(UNetMidBlock2DCrossAttn):
         if MODE == "read":
             if len(self.mean_bank) > 0 and len(self.var_bank) > 0:
                 var, mean = torch.var_mean(x, dim=(2, 3), keepdim=True, correction=0)
+                eps = 1e-6
                 std = torch.maximum(var, torch.zeros_like(var) + eps) ** 0.5
                 mean_acc = sum(self.mean_bank) / float(len(self.mean_bank))
                 var_acc = sum(self.var_bank) / float(len(self.var_bank))

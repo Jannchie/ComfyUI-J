@@ -75,3 +75,4 @@ class PipelineWrapper:
         self.pipeline.safety_checker = None
         with contextlib.suppress(Exception):
             self.pipeline.enable_xformers_memory_efficient_attention()
+            
