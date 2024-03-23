@@ -21,9 +21,13 @@ pip install -r requirements.txt
 
 ### Base Usage of Jannchie's Diffusers Pipeline
 
+You only have to deal with 4 nodes. The default comfy workflow uses 7 nodes to achieve the same result.
+
 ![Base Usage](./examples/base.png)
 
 ### Reference Only with Jannchie's Diffusers Pipeline
+
+ref_only supports two modes: attn and attn + adain, and can adjust the style fidelity parameter to control the style.
 
 ![Reference only](./examples/reference_only.png)
 
@@ -69,3 +73,4 @@ But combining research results is not an easy task, Comfy is good at combining a
 ## TODO
 
 - [ ] Add LoRA support
+- [ ] Stable Diffusion XL support
