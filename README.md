@@ -12,7 +12,7 @@ This set of nodes is based on Diffusers, which makes it easier to import models,
 In the `custom_nodes` directory, run
 
 ```bash
-git clone github.com/Jannchie/ComfyUI-J
+git clone https://github.com/Jannchie/ComfyUI-J
 cd ComfyUI-J
 pip install -r requirements.txt
 ```
@@ -46,11 +46,11 @@ This is a composite application of diffusers pipeline custom node. Includes:
 - Reference only
 - ControlNet
 - Inpainting
-- Texture Inversion
+- Textual Inversion
 
 This is a demonstration of a simple workflow for properly dressing a character.
 
-A checkpoint for stablediffusion 1.5 is all your need. But for full automation, I use the Comfyui_segformer_b2_clothes custom node for generating masks. you can draw your own masks without it.
+A checkpoint for stablediffusion 1.5 is all your need. But for full automation, I use the `Comfyui_segformer_b2_clothes` custom node for generating masks. you can draw your own masks without it.
 
 ![Change Clothes](./examples/change_clothes.png)
 
