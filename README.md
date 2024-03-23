@@ -33,6 +33,8 @@ ref_only supports two modes: attn and attn + adain, and can adjust the style fid
 
 ### ControlNet with Jannchie's Diffusers Pipeline
 
+ContorlNet is also easier to use. A DiffusersControlnetLoader node is provided for loading models. This node automatically detects if the corresponding ControlNet has been downloaded locally, and pulls the model from the huggingface if it has not.
+
 ![ControlNet](./examples/controlnet.png)
 
 ## Inpainting with Jannchie's Diffusers Pipeline
