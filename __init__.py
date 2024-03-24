@@ -74,6 +74,8 @@ def latents_to_img_tensor(pipeline, latents):
     # 1. 输入的 latents 是一个 -1 ~ 1 之间的 tensor
     # 2. 先进行缩放
     scaled_latents = latents / pipeline.vae.config.scaling_factor
+    # 转成 unet 类型
+    scaled_latents = scaled_latents.to(dtype=comfy.model_management.unet_dtype())
     # 3. 解码，返回的是 -1 ~ 1 之间的 tensor
     dec_tensor = pipeline.vae.decode(scaled_latents, return_dict=False)[0]
     # 4. 缩放到 0 ~ 1 之间
@@ -509,7 +511,7 @@ class DiffusersControlNetLoader:
             cache_dir=folder_paths.get_folder_paths("controlnet")[0],
         ).to(
             device=comfy.model_management.get_torch_device(),
-            dtype=comfy.model_management.VAE_DTYPE,
+            dtype=comfy.model_management.unet_dtype(),
         )
         return (controlnet,)
 

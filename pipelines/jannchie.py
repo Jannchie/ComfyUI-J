@@ -228,7 +228,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         *arg,
         **args,
     ):
-        device = self._execution_device
+        device = self.unet.device
         if height == None:
             if isinstance(image, torch.Tensor):
                 if image is not None:
@@ -441,14 +441,12 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
 
         # 7. Prepare mask latent variables
         if mask_image is not None:
-            print(height, width)
             mask_condition = self.mask_processor.preprocess(
                 mask_image, height=height, width=width
             )
             init_image = image
             init_image = init_image.to(dtype=torch.float32)
             if masked_image_latents is None:
-                print(init_image.shape, mask_condition.shape)
                 masked_image = init_image * (mask_condition < 0.5)
             else:
                 masked_image = masked_image_latents
@@ -458,7 +456,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                 batch_size * num_images_per_prompt,
                 height,
                 width,
-                prompt_embeds.dtype,
+                self.unet.dtype,
                 device,
                 generator,
                 do_classifier_free_guidance,
@@ -666,6 +664,9 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                         init_latents_proper = self.scheduler.add_noise(
                             init_latents_proper, noise, torch.tensor([noise_timestep])
                         )
+                        init_latents_proper = init_latents_proper.to(
+                            device=device, dtype=self.unet.dtype
+                        )
 
                     input_latents = (
                         1 - init_mask
@@ -686,6 +687,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
             torch.cuda.empty_cache()
 
         if output_type != "latent":
+            input_latents = input_latents.to(device=device, dtype=self.vae.dtype)
             result_imgs = self.vae.decode(
                 input_latents / self.vae.config.scaling_factor, return_dict=False
             )[0]
@@ -868,6 +870,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
             ]
             image_latents = torch.cat(image_latents, dim=0)
         else:
+            image = image.to(self.vae.dtype)
             image_latents = self.vae.encode(image).latent_dist.sample(
                 generator=generator
             )
@@ -989,6 +992,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
             image_latents = image_latents.repeat(
                 batch_size // image_latents.shape[0], 1, 1, 1
             )
+            image_latents.to(device=device, dtype=dtype)
 
         if latents is None:
             noise = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
@@ -1082,6 +1086,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
             ]
             image_latents = torch.cat(image_latents, dim=0)
         else:
+            image = image.to(self.vae.dtype)
             image_latents = retrieve_latents(
                 self.vae.encode(image), generator=generator
             )

@@ -1,6 +1,5 @@
 import contextlib
 
-import comfy.model_management
 from diffusers import AutoencoderKL
 from diffusers.schedulers import (
     DEISMultistepScheduler,
@@ -14,6 +13,9 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     UniPCMultistepScheduler,
 )
+
+import comfy.model_management
+import folder_paths
 
 from .jannchie import *
 
@@ -47,27 +49,37 @@ class PipelineWrapper:
     ):
         scheduler = schedulers.get(scheduler_name)
         device = comfy.model_management.get_torch_device()
-        dtype = comfy.model_management.VAE_DTYPE
+        vae_dtype = comfy.model_management.VAE_DTYPE
+        unet_dtype = comfy.model_management.unet_dtype()
         if ckpt_path.endswith(".safetensors"):
             self.pipeline = JannchiePipeline.from_single_file(
                 ckpt_path,
-                torch_dtype=dtype,
+                torch_dtype=unet_dtype,
+                cache_dir=folder_paths.get_folder_paths("diffusers"),
+                use_safetensors=True,
             )
         else:
             self.pipeline = JannchiePipeline.from_pretrained(
                 ckpt_path,
-                torch_dtype=dtype,
+                torch_dtype=unet_dtype,
+                cache_dir=folder_paths.get_folder_paths("diffusers"),
+                use_safetensors=ckpt_path.endswith(".safetensors"),
             )
+
         if vae_path:
             if vae_path.endswith(".safetensors"):
                 self.pipeline.vae = AutoencoderKL.from_single_file(
                     vae_path,
-                    torch_dtype=dtype,
+                    torch_dtype=vae_dtype,
+                    cache_dir=folder_paths.get_folder_paths("diffusers"),
+                    use_safetensors=True,
                 )
             else:
                 self.pipeline.vae = AutoencoderKL.from_pretrained(
                     vae_path,
-                    torch_dtype=dtype,
+                    torch_dtype=vae_dtype,
+                    cache_dir=folder_paths.get_folder_paths("diffusers"),
+                    use_safetensors=vae_path.endswith(".safetensors"),
                 )
         if scheduler:
             self.pipeline.scheduler = scheduler
@@ -75,4 +87,3 @@ class PipelineWrapper:
         self.pipeline.safety_checker = None
         with contextlib.suppress(Exception):
             self.pipeline.enable_xformers_memory_efficient_attention()
-            
