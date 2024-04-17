@@ -60,6 +60,10 @@ A checkpoint for stablediffusion 1.5 is all your need. But for full automation, 
 
 ![Change Clothes](./examples/change_clothes.png)
 
+## QR Code
+
+![QR Code](./examples/qr_code.png)
+
 ## FAQ
 
 ### Why Diffusers?

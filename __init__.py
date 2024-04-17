@@ -74,8 +74,8 @@ def latents_to_img_tensor(pipeline, latents):
     # 1. 输入的 latents 是一个 -1 ~ 1 之间的 tensor
     # 2. 先进行缩放
     scaled_latents = latents / pipeline.vae.config.scaling_factor
-    # 转成 unet 类型
-    scaled_latents = scaled_latents.to(dtype=comfy.model_management.unet_dtype())
+    # 转成 vae 类型
+    scaled_latents = scaled_latents.to(dtype=comfy.model_management.vae_dtype())
     # 3. 解码，返回的是 -1 ~ 1 之间的 tensor
     dec_tensor = pipeline.vae.decode(scaled_latents, return_dict=False)[0]
     # 4. 缩放到 0 ~ 1 之间
@@ -285,6 +285,7 @@ class DiffusersTextureInversionLoader:
             path = folder_paths.get_full_path("embeddings", texture_inversion)
             token = texture_inversion.split(".")[0]
             pipeline.load_textual_inversion(path, token=token)
+            print(f"Loaded {texture_inversion}")
         return (pipeline,)
 
 
@@ -351,7 +352,7 @@ class GetAverageColorFromImage:
         return max(color_counts, key=color_counts.get)
 
 
-class DiffusersPipeline:
+class DiffusersXLPipeline:
     CATEGORY = "Jannchie"
     FUNCTION = "run"
     RETURN_TYPES = ("DIFFUSERS_PIPELINE",)
@@ -361,7 +362,7 @@ class DiffusersPipeline:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
+                "ckpt_name": (["playgroundai/playground-v2.5-1024px-aesthetic"],),
             },
             "optional": {
                 "vae_name": (
@@ -379,6 +380,54 @@ class DiffusersPipeline:
 
     def run(self, ckpt_name: str, vae_name: str = None, scheduler_name: str = None):
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        if ckpt_path is None:
+            ckpt_path = ckpt_name
+        if vae_name == "-":
+            vae_path = None
+        else:
+            vae_path = folder_paths.get_full_path("vae", vae_name)
+        if scheduler_name == "-":
+            scheduler_name = None
+
+        self.pipeline_wrapper = PipelineWrapper(
+            ckpt_path, vae_path, scheduler_name, pipeline=StableDiffusionPipeline
+        )
+        return (self.pipeline_wrapper.pipeline,)
+
+
+class DiffusersPipeline:
+    CATEGORY = "Jannchie"
+    FUNCTION = "run"
+    RETURN_TYPES = ("DIFFUSERS_PIPELINE",)
+    RETURN_NAMES = ("pipeline",)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "ckpt_name": (
+                    ["playgroundai/playground-v2.5-1024px-aesthetic"]
+                    + folder_paths.get_filename_list("checkpoints"),
+                ),
+            },
+            "optional": {
+                "vae_name": (
+                    folder_paths.get_filename_list("vae") + ["-"],
+                    {"default": "-"},
+                ),
+                "scheduler_name": (
+                    list(schedulers.keys()) + ["-"],
+                    {
+                        "default": "-",
+                    },
+                ),
+            },
+        }
+
+    def run(self, ckpt_name: str, vae_name: str = None, scheduler_name: str = None):
+        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        if ckpt_path is None:
+            ckpt_path = ckpt_name
         if vae_name == "-":
             vae_path = None
         else:
@@ -477,6 +526,7 @@ controlnet_list = [
     "seg",
     "softedge",
     "lineart_anime",
+    "other",
 ]
 
 
@@ -492,18 +542,26 @@ class DiffusersControlNetLoader:
             "required": {
                 "controlnet_model_name": (controlnet_list,),
             },
+            "optional": {
+                "controlnet_model_file": (folder_paths.get_filename_list("controlnet"),)
+            },
         }
 
-    def run(self, controlnet_model_name: str):
+    def run(self, controlnet_model_name: str, controlnet_model_file: str = ""):
         file_list = folder_paths.get_filename_list("controlnet")
-        controlnet_model_path = next(
-            (
-                folder_paths.get_full_path("controlnet", file)
-                for file in file_list
-                if f"_v11p_sd15_{controlnet_model_name}.pth" in file
-            ),
-            None,
-        )
+        if controlnet_model_name == "other":
+            controlnet_model_path = folder_paths.get_full_path(
+                "controlnet", controlnet_model_file
+            )
+        else:
+            controlnet_model_path = next(
+                (
+                    folder_paths.get_full_path("controlnet", file)
+                    for file in file_list
+                    if f"_v11p_sd15_{controlnet_model_name}.pth" in file
+                ),
+                None,
+            )
         if controlnet_model_path is None:
             controlnet_model_path = f"https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/control_v11p_sd15_{controlnet_model_name}.pth"
         controlnet = ControlNetModel.from_single_file(
@@ -780,6 +838,7 @@ NODE_CLASS_MAPPINGS = {
     "GetFilledColorImage": GetFilledColorImage,
     "GetAverageColorFromImage": GetAverageColorFromImage,
     "DiffusersPipeline": DiffusersPipeline,
+    "DiffusersXLPipeline": DiffusersXLPipeline,
     "DiffusersGenerator": DiffusersGenerator,
     "DiffusersPrepareLatents": DiffusersPrepareLatents,
     "DiffusersDecoder": DiffusersDecoder,
@@ -793,6 +852,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GetFilledColorImage": "Get Filled Color Image Jannchie",
     "GetAverageColorFromImage": "Get Average Color From Image Jannchie",
     "DiffusersPipeline": "🤗 Diffusers Pipeline",
+    "DiffusersXLPipeline": "🤗 Diffusers XL Pipeline",
     "DiffusersGenerator": "🤗 Diffusers Generator",
     "DiffusersPrepareLatents": "🤗 Diffusers Prepare Latents",
     "DiffusersDecoder": "🤗 Diffusers Decoder",

@@ -443,7 +443,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         if mask_image is not None:
             mask_condition = self.mask_processor.preprocess(
                 mask_image, height=height, width=width
-            )
+            ).to(device=device)
             init_image = image
             init_image = init_image.to(dtype=torch.float32)
             if masked_image_latents is None:
@@ -564,6 +564,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                         encoder_hidden_states=prompt_embeds,
                         cross_attention_kwargs=cross_attention_kwargs,
                         return_dict=False,
+                        added_cond_kwargs={},
                     )
                     self.unet.ref_data.MODE = "read"
 
@@ -605,7 +606,9 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                 )
                 if n_controlnet_unit != 0:
                     down_block_res_samples, mid_block_res_sample = self.controlnet(
-                        control_model_input,
+                        control_model_input.to(
+                            device=device, dtype=self.controlnet.dtype
+                        ),
                         t,
                         encoder_hidden_states=controlnet_prompt_embeds,
                         controlnet_cond=controlnet_images,
@@ -632,12 +635,17 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                     down_block_res_samples, mid_block_res_sample = None, None
                 # predict the noise residual
                 noise_pred = self.unet(
-                    latent_model_input,
+                    latent_model_input.to(device=device, dtype=self.unet.dtype),
                     t,
-                    encoder_hidden_states=prompt_embeds,
+                    encoder_hidden_states=prompt_embeds.to(
+                        device=device, dtype=self.unet.dtype
+                    ),
                     cross_attention_kwargs=cross_attention_kwargs,
                     down_block_additional_residuals=down_block_res_samples,
                     mid_block_additional_residual=mid_block_res_sample,
+                    added_cond_kwargs={
+                        "text_embeds": prompt_embeds,
+                    },
                 )["sample"]
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -983,6 +991,8 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         )
         if return_image_latents or (latents is None and not is_strength_max):
             # TODO: check it
+            if image is None:
+                image = torch.randn(shape, device=device, dtype=dtype)
             image = image.to(device=device, dtype=dtype)
 
             if image.shape[1] == 4:
