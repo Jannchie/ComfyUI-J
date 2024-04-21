@@ -76,6 +76,7 @@ def latents_to_img_tensor(pipeline, latents):
     scaled_latents = latents / pipeline.vae.config.scaling_factor
     # 转成 vae 类型
     scaled_latents = scaled_latents.to(dtype=comfy.model_management.vae_dtype())
+    print(scaled_latents.dtype, pipeline.vae.dtype)
     # 3. 解码，返回的是 -1 ~ 1 之间的 tensor
     dec_tensor = pipeline.vae.decode(scaled_latents, return_dict=False)[0]
     # 4. 缩放到 0 ~ 1 之间

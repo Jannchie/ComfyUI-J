@@ -49,7 +49,7 @@ class PipelineWrapper:
     ):
         scheduler = schedulers.get(scheduler_name)
         device = comfy.model_management.get_torch_device()
-        vae_dtype = comfy.model_management.VAE_DTYPE
+        vae_dtype = comfy.model_management.vae_dtype()
         unet_dtype = comfy.model_management.unet_dtype()
         if ckpt_path.endswith(".safetensors"):
             self.pipeline = JannchiePipeline.from_single_file(
@@ -84,6 +84,7 @@ class PipelineWrapper:
         if scheduler:
             self.pipeline.scheduler = scheduler
         self.pipeline.to(device)
+        self.pipeline.vae.to(vae_dtype)
         self.pipeline.safety_checker = None
         with contextlib.suppress(Exception):
             self.pipeline.enable_xformers_memory_efficient_attention()

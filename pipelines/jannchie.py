@@ -445,7 +445,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                 mask_image, height=height, width=width
             ).to(device=device)
             init_image = image
-            init_image = init_image.to(dtype=torch.float32)
+            init_image = init_image.to(dtype=torch.float32, device=device)
             if masked_image_latents is None:
                 masked_image = init_image * (mask_condition < 0.5)
             else:
