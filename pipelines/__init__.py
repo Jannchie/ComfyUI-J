@@ -1,6 +1,6 @@
 import contextlib
 
-from diffusers import AutoencoderKL
+from diffusers import AutoencoderKL, AutoencoderTiny, DPMSolverMultistepScheduler
 from diffusers.schedulers import (
     DEISMultistepScheduler,
     DPMSolverMultistepScheduler,
@@ -45,7 +45,11 @@ schedulers = {
 class PipelineWrapper:
 
     def __init__(
-        self, ckpt_path: str, vae_path: str = None, scheduler_name: str = None
+        self,
+        ckpt_path: str,
+        vae_path: str = None,
+        scheduler_name: str = None,
+        use_tiny_vae: bool = False,
     ):
         scheduler = schedulers.get(scheduler_name)
         device = comfy.model_management.get_torch_device()
@@ -66,7 +70,12 @@ class PipelineWrapper:
                 use_safetensors=ckpt_path.endswith(".safetensors"),
             )
 
-        if vae_path:
+        if use_tiny_vae:
+            self.pipeline.vae = AutoencoderTiny.from_pretrained("madebyollin/taesd").to(
+                device=self.pipeline.device, dtype=vae_dtype
+            )
+
+        elif vae_path:
             if vae_path.endswith(".safetensors"):
                 self.pipeline.vae = AutoencoderKL.from_single_file(
                     vae_path,
@@ -81,6 +90,7 @@ class PipelineWrapper:
                     cache_dir=folder_paths.get_folder_paths("diffusers"),
                     use_safetensors=vae_path.endswith(".safetensors"),
                 )
+
         if scheduler:
             self.pipeline.scheduler = scheduler
         self.pipeline.to(device)
