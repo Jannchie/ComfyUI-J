@@ -363,7 +363,7 @@ class DiffusersXLPipeline:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "ckpt_name": (["playgroundai/playground-v2.5-1024px-aesthetic"],),
+                "ckpt_name": ([],),
             },
             "optional": {
                 "vae_name": (
@@ -376,10 +376,22 @@ class DiffusersXLPipeline:
                         "default": "-",
                     },
                 ),
+                "use_tiny_vae": (
+                    ["disable", "enable"],
+                    {
+                        "default": "disable",
+                    },
+                ),
             },
         }
 
-    def run(self, ckpt_name: str, vae_name: str = None, scheduler_name: str = None):
+    def run(
+        self,
+        ckpt_name: str,
+        vae_name: str = None,
+        scheduler_name: str = None,
+        use_tiny_vae: str = "disable",
+    ):
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
         if ckpt_path is None:
             ckpt_path = ckpt_name
@@ -391,7 +403,11 @@ class DiffusersXLPipeline:
             scheduler_name = None
 
         self.pipeline_wrapper = PipelineWrapper(
-            ckpt_path, vae_path, scheduler_name, pipeline=StableDiffusionPipeline
+            ckpt_path,
+            vae_path,
+            scheduler_name,
+            pipeline=StableDiffusionPipeline,
+            use_tiny_vae=use_tiny_vae == "enable",
         )
         return (self.pipeline_wrapper.pipeline,)
 
@@ -406,10 +422,7 @@ class DiffusersPipeline:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "ckpt_name": (
-                    ["playgroundai/playground-v2.5-1024px-aesthetic"]
-                    + folder_paths.get_filename_list("checkpoints"),
-                ),
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
             },
             "optional": {
                 "vae_name": (
@@ -422,10 +435,22 @@ class DiffusersPipeline:
                         "default": "-",
                     },
                 ),
+                "use_tiny_vae": (
+                    ["disable", "enable"],
+                    {
+                        "default": "disable",
+                    },
+                ),
             },
         }
 
-    def run(self, ckpt_name: str, vae_name: str = None, scheduler_name: str = None):
+    def run(
+        self,
+        ckpt_name: str,
+        vae_name: str = None,
+        scheduler_name: str = None,
+        use_tiny_vae: str = "disable",
+    ):
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
         if ckpt_path is None:
             ckpt_path = ckpt_name
@@ -436,7 +461,9 @@ class DiffusersPipeline:
         if scheduler_name == "-":
             scheduler_name = None
 
-        self.pipeline_wrapper = PipelineWrapper(ckpt_path, vae_path, scheduler_name)
+        self.pipeline_wrapper = PipelineWrapper(
+            ckpt_path, vae_path, scheduler_name, use_tiny_vae=use_tiny_vae == "enable"
+        )
         return (self.pipeline_wrapper.pipeline,)
 
 
@@ -512,6 +539,7 @@ class DiffusersDecoder:
 
 
 # 'https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/control_v11p_sd15_canny.pth'
+
 controlnet_list = [
     "canny",
     "openpose",
@@ -555,16 +583,22 @@ class DiffusersControlNetLoader:
                 "controlnet", controlnet_model_file
             )
         else:
+            if controlnet_model_name == "depth":
+                file_name = f"control_v11f1p_sd15_{controlnet_model_name}.pth"
+            elif controlnet_model_name == "tile":
+                file_name = f"control_v11f1e_sd15_{controlnet_model_name}.pth"
+            else:
+                file_name = f"control_v11p_sd15_{controlnet_model_name}.pth"
             controlnet_model_path = next(
                 (
                     folder_paths.get_full_path("controlnet", file)
                     for file in file_list
-                    if f"_v11p_sd15_{controlnet_model_name}.pth" in file
+                    if file_name in file
                 ),
                 None,
             )
         if controlnet_model_path is None:
-            controlnet_model_path = f"https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/control_v11p_sd15_{controlnet_model_name}.pth"
+            controlnet_model_path = f"https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/{file_name}"
         controlnet = ControlNetModel.from_single_file(
             controlnet_model_path,
             cache_dir=folder_paths.get_folder_paths("controlnet")[0],
