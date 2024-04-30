@@ -225,6 +225,8 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         timesteps: List[int] = None,
         mask_image: PipelineImageInput = None,
         masked_image_latents: Optional[torch.FloatTensor] = None,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
+        ip_adapter_image_embeds: Optional[List[torch.FloatTensor]] = None,
         *arg,
         **args,
     ):
@@ -476,6 +478,25 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         # 9. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
+        if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
+            image_embeds = self.prepare_ip_adapter_image_embeds(
+                ip_adapter_image,
+                ip_adapter_image_embeds,
+                device,
+                batch_size * num_images_per_prompt,
+                do_classifier_free_guidance,
+            )
+
+        # Add image embeds for IP-Adapter
+        added_cond_kwargs = (
+            {"image_embeds": image_embeds}
+            if (ip_adapter_image is not None or ip_adapter_image_embeds is not None)
+            else None
+        )
+
+        # text_embeds for reference, TODO: I forgot why it is needed
+        added_cond_kwargs["text_embeds"] = prompt_embeds
+
         ref_mask_dict, out_mask_dict = self.get_ref_mask_dicts(
             ref_image_mask,
             height,
@@ -564,7 +585,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                         encoder_hidden_states=prompt_embeds,
                         cross_attention_kwargs=cross_attention_kwargs,
                         return_dict=False,
-                        added_cond_kwargs={},
+                        added_cond_kwargs=added_cond_kwargs,
                     )
                     self.unet.ref_data.MODE = "read"
 
@@ -643,9 +664,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
                     cross_attention_kwargs=cross_attention_kwargs,
                     down_block_additional_residuals=down_block_res_samples,
                     mid_block_additional_residual=mid_block_res_sample,
-                    added_cond_kwargs={
-                        "text_embeds": prompt_embeds,
-                    },
+                    added_cond_kwargs=added_cond_kwargs,
                 )["sample"]
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -871,17 +890,13 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         # encode the mask image into latents space so we can concatenate it to the latents
         if isinstance(generator, list):
             image_latents = [
-                self.vae.encode(image[i : i + 1]).latent_dist.sample(
-                    generator=generator[i]
-                )
+                retrieve_latents(self.vae.encode(image[i : i + 1]), generator[i])
                 for i in range(batch_size)
             ]
             image_latents = torch.cat(image_latents, dim=0)
         else:
             image = image.to(self.vae.dtype)
-            image_latents = self.vae.encode(image).latent_dist.sample(
-                generator=generator
-            )
+            image_latents = retrieve_latents(self.vae.encode(image), generator)
         image_latents = self.vae.config.scaling_factor * image_latents
 
         # duplicate mask and ref_image_latents for each generation per prompt, using mps friendly method
@@ -942,17 +957,15 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         if isinstance(generator, list):
             image_latent = torch.cat(
                 [
-                    self.vae.encode(image_tensor[i : i + 1]).latent_dist.sample(
-                        generator=generator[i]
+                    retrieve_latents(
+                        self.vae.encode(image_tensor[i : i + 1]), generator[i]
                     )
                     for i in range(image_tensor.shape[0])
                 ],
                 dim=0,
             )
         else:
-            image_latent = self.vae.encode(image_tensor).latent_dist.sample(
-                generator=generator
-            )
+            image_latent = retrieve_latents(self.vae.encode(image_tensor), generator)
         image_latent = self.vae.config.scaling_factor * image_latent
 
         return image_latent.to(device=device, dtype=dtype)
