@@ -491,7 +491,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         added_cond_kwargs = (
             {"image_embeds": image_embeds}
             if (ip_adapter_image is not None or ip_adapter_image_embeds is not None)
-            else None
+            else {}
         )
 
         # text_embeds for reference, TODO: I forgot why it is needed
