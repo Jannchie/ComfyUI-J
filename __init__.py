@@ -1,4 +1,5 @@
 import contextlib
+import gc
 import random
 from collections import Counter
 
@@ -866,6 +867,8 @@ class DiffusersGenerator:
         # 0 ~ 255 to 0 ~ 1
         imgs = imgs / 255
         # (B, C, H, W) to (B, H, W, C)
+        torch.cuda.empty_cache()
+        gc.collect()
         return (imgs,)
 
 
