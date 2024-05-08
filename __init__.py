@@ -452,6 +452,8 @@ class DiffusersPipeline:
         scheduler_name: str = None,
         use_tiny_vae: str = "disable",
     ):
+        torch.cuda.empty_cache()
+        gc.collect()
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
         if ckpt_path is None:
             ckpt_path = ckpt_name
