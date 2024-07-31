@@ -227,6 +227,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
         masked_image_latents: Optional[torch.FloatTensor] = None,
         ip_adapter_image: Optional[PipelineImageInput] = None,
         ip_adapter_image_embeds: Optional[List[torch.FloatTensor]] = None,
+        reference_strength: float = 1.0,
         *arg,
         **args,
     ):
@@ -515,6 +516,7 @@ class JannchiePipeline(StableDiffusionControlNetPipeline):
             gn_auto_machine_weight=gn_auto_machine_weight,
             ref_mask_dict=ref_mask_dict,
             out_mask_dict=out_mask_dict,
+            strength=reference_strength,
         )
         if reference_attn:
             self.unet = ReferenceOnlyUNet2DConditionModel.from_unet(
@@ -1132,6 +1134,7 @@ class ReferenceData:
     gn_auto_machine_weight: float = 1.0
     ref_mask_dict: dict = None
     out_mask_dict: dict = None
+    strength: float = 1.0
 
 
 class ReferenceOnlyUNet2DConditionModel(UNet2DConditionModel):
@@ -1310,6 +1313,7 @@ class BasicTransformerBlockReferenceOnly(BasicTransformerBlock):
                     style_fidelity * attn_output_c
                     + (1.0 - style_fidelity) * attn_output_uc
                 )
+                attn_output *= ref_data.strength
                 bank.clear()
             else:
                 # without reference only
@@ -1436,6 +1440,7 @@ class CrossAttnDownBlock2DReferenceOnly(CrossAttnDownBlock2D):
                     style_fidelity * hidden_states_c
                     + (1.0 - style_fidelity) * hidden_states_uc
                 )
+                hidden_states *= self.ref_data.strength
             # apply additional residuals to the output of the last pair of resnet and attention blocks
             if i == len(blocks) - 1 and additional_residuals is not None:
                 hidden_states = hidden_states + additional_residuals
@@ -1501,6 +1506,7 @@ class DownBlock2DReferenceOnly(DownBlock2D):
                     style_fidelity * hidden_states_c
                     + (1.0 - style_fidelity) * hidden_states_uc
                 )
+                hidden_states *= self.ref_data.strength
 
             output_states = output_states + (hidden_states,)
 
@@ -1566,6 +1572,7 @@ class UNetMidBlock2DCrossAttnReferenceOnly(UNetMidBlock2DCrossAttn):
                 if do_classifier_free_guidance and style_fidelity > 0:
                     x_c[uc_mask] = x[uc_mask]
                 x = style_fidelity * x_c + (1.0 - style_fidelity) * x_uc
+                x *= self.ref_data.strength
             self.mean_bank = []
             self.var_bank = []
         return x
@@ -1623,6 +1630,7 @@ class UpBlock2DReferenceOnly(UpBlock2D):
                     style_fidelity * hidden_states_c
                     + (1.0 - style_fidelity) * hidden_states_uc
                 )
+                hidden_states *= self.ref_data.strength
 
         if MODE == "read":
             self.mean_bank = []
@@ -1699,6 +1707,7 @@ class CrossAttnUpBlock2DReferenceOnly(CrossAttnUpBlock2D):
                     style_fidelity * hidden_states_c
                     + (1.0 - style_fidelity) * hidden_states_uc
                 )
+                hidden_states *= self.ref_data.strength
 
         if MODE == "read":
             self.mean_bank = []

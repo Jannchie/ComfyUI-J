@@ -201,7 +201,7 @@ class GetFilledColorImage:
                         "default": 0.0,
                         "min": 0.0,
                         "max": 1.0,
-                        "step": 0.1,
+                        "step": 0.01,
                         "display": "number",
                     },
                 ),
@@ -211,7 +211,7 @@ class GetFilledColorImage:
                         "default": 0.0,
                         "min": 0.0,
                         "max": 1.0,
-                        "step": 0.1,
+                        "step": 0.01,
                         "display": "number",
                     },
                 ),
@@ -221,7 +221,7 @@ class GetFilledColorImage:
                         "default": 0.0,
                         "min": 0.0,
                         "max": 1.0,
-                        "step": 0.1,
+                        "step": 0.01,
                         "display": "number",
                     },
                 ),
@@ -513,7 +513,7 @@ class DiffusersPrepareLatents:
             batch_size=batch_size,
             height=height,
             width=width,
-            dtype=comfy.model_management.VAE_DTYPE,
+            dtype=comfy.model_management.vae_dtype(),
             device=device,
             generator=generator,
             latents=latents,
@@ -688,8 +688,8 @@ class DiffusersControlNetUnitStack:
     def run(
         self,
         controlnet_unit_1: tuple[ControlNetModel],
-        controlnet_unit_2: tuple[ControlNetModel] | None,
-        controlnet_unit_3: tuple[ControlNetModel] | None,
+        controlnet_unit_2: tuple[ControlNetModel] | None = None,
+        controlnet_unit_3: tuple[ControlNetModel] | None = None,
     ):
         stack = []
         if controlnet_unit_1:
@@ -749,13 +749,22 @@ class DiffusersGenerator:
                         "step": 64,
                     },
                 ),
+                "reference_strength": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                    },
+                ),
                 "reference_style_fidelity": (
                     "FLOAT",
                     {
                         "default": 0.5,
                         "min": 0.0,
                         "max": 1.0,
-                        "step": 0.1,
+                        "step": 0.01,
                     },
                 ),
             },
@@ -801,6 +810,7 @@ class DiffusersGenerator:
         reference_only_adain: str = "disable",
         reference_image: torch.Tensor | None = None,
         reference_style_fidelity: float = 0.5,
+        reference_strength: float = 1.0,
     ):
         reference_only = reference_only == "enable"
         reference_only_adain = reference_only_adain == "enable"
@@ -820,7 +830,7 @@ class DiffusersGenerator:
                 width=width,
                 generator=generator,
                 device=device,
-                dtype=comfy.model_management.VAE_DTYPE,
+                dtype=comfy.model_management.vae_dtype(),
             )
             images = latents_to_img_tensor(pipeline, latents)
         else:
@@ -856,6 +866,7 @@ class DiffusersGenerator:
             strength=strength,
             controlnet_units=controlnet_units,
             callback=callback,
+            reference_strength=reference_strength,
             reference_attn=reference_only,
             reference_adain=reference_only_adain,
             style_fidelity=reference_style_fidelity,

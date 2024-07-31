@@ -59,14 +59,14 @@ class PipelineWrapper:
             self.pipeline = JannchiePipeline.from_single_file(
                 ckpt_path,
                 torch_dtype=unet_dtype,
-                cache_dir=folder_paths.get_folder_paths("diffusers"),
+                cache_dir=folder_paths.get_folder_paths("diffusers")[0],
                 use_safetensors=True,
             )
         else:
             self.pipeline = JannchiePipeline.from_pretrained(
                 ckpt_path,
                 torch_dtype=unet_dtype,
-                cache_dir=folder_paths.get_folder_paths("diffusers"),
+                cache_dir=folder_paths.get_folder_paths("diffusers")[0],
                 use_safetensors=ckpt_path.endswith(".safetensors"),
             )
 
