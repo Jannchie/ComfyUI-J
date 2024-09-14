@@ -302,7 +302,7 @@ class GetAverageColorFromImage:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "average": ("STRING", {"default": "mean", "options": ["mean", "mode"]}),
+                "average": (("mean", "mode"),),
             },
             "optional": {
                 "mask": ("MASK",),
@@ -310,48 +310,53 @@ class GetAverageColorFromImage:
         }
 
     def run(self, image: torch.Tensor, average: str, mask: torch.Tensor = None):
+        if mask is not None:
+            assert (
+                mask.ndim == image.ndim - 1
+            ), "Mask dimensions must be one less than image dimensions."
+            mask = mask.unsqueeze(3)  # Unsqueeze to match (B, 1, H, W)
+        if mask is not None and torch.sum(mask) == 0:
+            mask = None
         if average == "mean":
             return self.run_avg(image, mask)
         elif average == "mode":
             return self.run_mode(image, mask)
+        else:
+            raise ValueError("average must be either 'mean' or 'mode'")
 
     def run_avg(self, image: torch.Tensor, mask: torch.Tensor = None):
-        if mask is not None:
-            mask = mask.unsqueeze(1)
         masked_image = image * mask if mask is not None else image
-        pixel_sum = torch.sum(masked_image, dim=(2, 3))
-        pixel_count = (
-            torch.sum(mask, dim=(2, 3))
-            if mask is not None
-            else torch.prod(torch.tensor(image.shape[2:]))
-        )
-        average_rgb = pixel_sum / pixel_count.unsqueeze(1)
 
-        average_rgb = torch.round(average_rgb)
-
-        return tuple(average_rgb.squeeze().tolist())
+        pixel_sum = torch.sum(masked_image, dim=(1, 2))
+        if mask is not None:
+            pixel_count = torch.sum(mask, dim=(1, 2)).unsqueeze(1)
+        else:
+            pixel_count = torch.tensor(image.shape[1] * image.shape[2]).unsqueeze(0)
+        average_rgb = pixel_sum / pixel_count
+        average_rgb = torch.round(average_rgb * 255)
+        return tuple(average_rgb.squeeze().int().tolist())
 
     def run_mode(self, image: torch.Tensor, mask: torch.Tensor = None):
-        image = image.permute(0, 3, 1, 2)
         if mask is not None:
-            mask = mask.unsqueeze(1)
+            image = image * mask
 
-        masked_image = image * mask if mask is not None else image
-        pixel_values = masked_image.view(
-            masked_image.shape[0], masked_image.shape[1], -1
-        )
-        pixel_values = pixel_values.permute(0, 2, 1)
-        pixel_values = pixel_values.reshape(-1, pixel_values.shape[2])
-        pixel_values = [
-            tuple(color.tolist()) for color in pixel_values.numpy() if color.max() > 0
-        ]
+        # Flatten the image to a 2D matrix where each row is a color
+        flattened_image = image.view(-1, image.shape[-1])
 
-        if not pixel_values:
-            return (0, 0, 0)
+        # If mask is provided, remove rows where mask is zero
+        if mask is not None:
+            flattened_mask = mask.view(-1, 1)
+            flattened_image = flattened_image[flattened_mask.squeeze() > 0]
 
-        color_counts = Counter(pixel_values)
+        # Convert the pixel values to a format that can be efficiently counted
+        unique_colors, counts = torch.unique(flattened_image, return_counts=True, dim=0)
 
-        return max(color_counts, key=color_counts.get)
+        # Find the most frequent color
+        max_idx = torch.argmax(counts)
+        mode_rgb = unique_colors[max_idx]
+
+        mode_rgb = torch.round(mode_rgb * 255)
+        return tuple(mode_rgb.int().tolist())
 
 
 class DiffusersXLPipeline:
