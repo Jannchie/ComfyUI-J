@@ -17,6 +17,9 @@ from comfy.utils import ProgressBar
 
 from .pipelines import ControlNetUnit, ControlNetUnits, PipelineWrapper, schedulers
 
+from configs.node_fields import get_field_pre_values
+
+
 
 def resize_with_padding(image: Image.Image, target_size: tuple[int, int]):
     # 打开图像
@@ -373,7 +376,8 @@ class DiffusersXLPipeline:
             },
             "optional": {
                 "vae_name": (
-                    folder_paths.get_filename_list("vae") + ["-"],
+                    get_field_pre_values("DiffusersXLPipeline", "vae_name") + ["-"],
+                    # folder_paths.get_filename_list("vae") + ["-"],
                     {"default": "-"},
                 ),
                 "scheduler_name": (
@@ -432,7 +436,8 @@ class DiffusersPipeline:
             },
             "optional": {
                 "vae_name": (
-                    folder_paths.get_filename_list("vae") + ["-"],
+                    get_field_pre_values("DiffusersPipeline", "vae_name") + ["-"],
+                    # folder_paths.get_filename_list("vae") + ["-"],
                     {"default": "-"},
                 ),
                 "scheduler_name": (
