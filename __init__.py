@@ -281,7 +281,9 @@ class DiffusersTextureInversionLoader:
         return {
             "required": {
                 "pipeline": ("DIFFUSERS_PIPELINE",),
-                "texture_inversion": (folder_paths.get_filename_list("embeddings"),),
+                #liblib adapter 为了防止节点注释掉导致无法找到，这里将返回空的
+                # "texture_inversion": (folder_paths.get_filename_list("embeddings"),),
+                "texture_inversion": ([],)
             },
         }
 
@@ -582,36 +584,43 @@ class DiffusersControlNetLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "controlnet_model_name": (controlnet_list,),
+                #liblib adapter 
+                # "controlnet_model_name": (controlnet_list,),
+                "controlnet_model_name": (get_field_pre_values("DiffusersControlnetLoader", "controlnet_model_name"),)
             },
             "optional": {
-                "controlnet_model_file": (folder_paths.get_filename_list("controlnet"),)
+                #liblib adapter 不支持其他的，因为没有哦可见列表
+                # "controlnet_model_file": (folder_paths.get_filename_list("controlnet"),)
+                "controlnet_model_file": (["None"],)
             },
         }
 
     def run(self, controlnet_model_name: str, controlnet_model_file: str = ""):
-        file_list = folder_paths.get_filename_list("controlnet")
-        if controlnet_model_name == "other":
-            controlnet_model_path = folder_paths.get_full_path(
-                "controlnet", controlnet_model_file
-            )
-        else:
-            if controlnet_model_name == "depth":
-                file_name = f"control_v11f1p_sd15_{controlnet_model_name}.pth"
-            elif controlnet_model_name == "tile":
-                file_name = f"control_v11f1e_sd15_{controlnet_model_name}.pth"
-            else:
-                file_name = f"control_v11p_sd15_{controlnet_model_name}.pth"
-            controlnet_model_path = next(
-                (
-                    folder_paths.get_full_path("controlnet", file)
-                    for file in file_list
-                    if file_name in file
-                ),
-                None,
-            )
-        if controlnet_model_path is None:
-            controlnet_model_path = f"https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/{file_name}"
+        #liblib adapter 
+        # file_list = folder_paths.get_filename_list("controlnet")
+        # if controlnet_model_name == "other":
+        #     controlnet_model_path = folder_paths.get_full_path(
+        #         "controlnet", controlnet_model_file
+        #     )
+        # else:
+        #     if controlnet_model_name == "depth":
+        #         file_name = f"control_v11f1p_sd15_{controlnet_model_name}.pth"
+        #     elif controlnet_model_name == "tile":
+        #         file_name = f"control_v11f1e_sd15_{controlnet_model_name}.pth"
+        #     else:
+        #         file_name = f"control_v11p_sd15_{controlnet_model_name}.pth"
+        #     controlnet_model_path = next(
+        #         (
+        #             folder_paths.get_full_path("controlnet", file)
+        #             for file in file_list
+        #             if file_name in file
+        #         ),
+        #         None,
+        #     )
+        # if controlnet_model_path is None:
+        #     controlnet_model_path = f"https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/{file_name}"
+        print("controlnet_model_name:", controlnet_model_name)
+        controlnet_model_path = controlnet_model_name
         controlnet = ControlNetModel.from_single_file(
             controlnet_model_path,
             cache_dir=folder_paths.get_folder_paths("controlnet")[0],
